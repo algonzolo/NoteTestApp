@@ -60,7 +60,19 @@ extension NotesListViewController: UITableViewDataSource, UITableViewDelegate {
     func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
         guard let cell = tableView.dequeueReusableCell(withIdentifier: NoteListTableViewCell.cellIdentifier, for: indexPath) as? NoteListTableViewCell else { fatalError() }
         let note = notes[indexPath.row]
-        cell.contentLabel.text = note.text
+        
+        if let attributedTextData = note.attributedTextData {
+            do {
+                let attributedText = try NSKeyedUnarchiver.unarchivedObject(ofClass: NSAttributedString.self, from: attributedTextData)
+                cell.contentLabel.attributedText = attributedText
+            } catch {
+                print("Error unarchiving attributed text: \(error)")
+                cell.contentLabel.text = note.text
+            }
+        } else {
+            cell.contentLabel.text = note.text
+        }
+        
         cell.titleLabel.text = "№\(indexPath.row + 1)"
         return cell
     }
@@ -87,6 +99,3 @@ extension NotesListViewController: UITableViewDataSource, UITableViewDelegate {
         }
     }
 }
-
-
-

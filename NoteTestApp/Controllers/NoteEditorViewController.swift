@@ -1,4 +1,3 @@
-//
 //  NoteEditorViewController.swift
 //  NoteTestApp
 //
@@ -8,12 +7,13 @@
 import UIKit
 
 final class NoteEditorViewController: UIViewController {
+    
     //MARK: - Properties
     var note: Note?
-    private var isBold = false
-    private var isItalic = false
-    private var isUnderline = false
-    private var currentFontSize: CGFloat = 18
+    var isBold = false
+    var isItalic = false
+    var isUnderline = false
+    var currentFontSize: CGFloat = 18
     var completion: (Note) -> Void
     var textView: UITextView!
     
@@ -46,9 +46,22 @@ final class NoteEditorViewController: UIViewController {
     private func setupTextView() {
         textView = UITextView(frame: view.bounds)
         textView.delegate = self
-        textView.text = note?.text
-        textView.textContainerInset = UIEdgeInsets(top: 0, left: 10, bottom: 0, right: 10)
-        textView.font = UIFont.systemFont(ofSize: 18)
+        
+        if let attributedTextData = note?.attributedTextData {
+            do {
+                if let attributedText = try NSKeyedUnarchiver.unarchivedObject(ofClass: NSAttributedString.self, from: attributedTextData) {
+                    textView.attributedText = attributedText
+                }
+            } catch {
+                print("Error unarchiving attributed text: \(error)")
+            }
+        } else {
+            textView.text = note?.text
+            textView.font = UIFont.systemFont(ofSize: currentFontSize)
+        }
+        
+        textView.textContainerInset = UIEdgeInsets(top: 0, left: 8, bottom: 0, right: -8)
+        textView.textContainer.lineFragmentPadding = 0
         view.addSubview(textView)
     }
     
@@ -57,12 +70,17 @@ final class NoteEditorViewController: UIViewController {
     }
     
     @objc private func saveNote() {
-        guard let text = textView.text else { return }
-        note?.text = text
+        guard let attributedText = textView.attributedText else { return }
+        
+        let attributedTextData = try? NSKeyedArchiver.archivedData(withRootObject: attributedText, requiringSecureCoding: false)
+        
+        note?.text = attributedText.string
+        note?.attributedTextData = attributedTextData
         completion(note!)
         navigationController?.popViewController(animated: true)
     }
 }
+
 //MARK: - Buttons methods
 extension NoteEditorViewController {
     private func setupFormattingToolbar() {
@@ -73,32 +91,29 @@ extension NoteEditorViewController {
         
         let boldButton = UIBarButtonItem(image: UIImage(systemName: "bold"), style: .plain, target: self, action: #selector(toggleBoldText))
         let italicButton = UIBarButtonItem(image: UIImage(systemName: "italic"), style: .plain, target: self, action: #selector(toggleItalicText))
-        let underlinebutton = UIBarButtonItem(image: UIImage(systemName: "underline"), style: .plain, target: self, action: #selector(toggleUnderlineText))
-        let fontButton = UIBarButtonItem(image: UIImage(systemName: "textformat.size"), style: .plain, target: self, action: #selector(toggleFontText))
+        let underlineButton = UIBarButtonItem(image: UIImage(systemName: "underline"), style: .plain, target: self, action: #selector(toggleUnderlineText))
         let imageButton = UIBarButtonItem(image: UIImage(systemName: "photo.artframe"), style: .plain, target: self, action: #selector(imageButtonTapped))
         
-        toolbar.setItems([flexibleSpace, boldButton, flexibleSpace, italicButton, flexibleSpace, underlinebutton, flexibleSpace, fontButton, flexibleSpace, imageButton, flexibleSpace], animated: false)
+        toolbar.setItems([flexibleSpace, boldButton, flexibleSpace, italicButton, flexibleSpace, underlineButton, flexibleSpace, imageButton, flexibleSpace], animated: false)
         textView.inputAccessoryView = toolbar
     }
     
     @objc private func toggleBoldText() {
         isBold.toggle()
-        updateFont(isBold: isBold, isItalic: isItalic, isUnderline: isUnderline, fontSize: currentFontSize)
+        updateFont()
     }
     
     @objc private func toggleItalicText() {
         isItalic.toggle()
-        updateFont(isBold: isBold, isItalic: isItalic, isUnderline: isUnderline, fontSize: currentFontSize)
+        updateFont()
     }
     
     @objc private func toggleUnderlineText() {
         isUnderline.toggle()
-        updateFont(isBold: isBold, isItalic: isItalic, isUnderline: isUnderline, fontSize: currentFontSize)
-    }
-    
-    @objc private func toggleFontText() {
-        currentFontSize = (currentFontSize == 24) ? 18 : 24
-        updateFont(isBold: isBold, isItalic: isItalic, isUnderline: isUnderline, fontSize: currentFontSize)
+        updateFont()
+        var newTypingAttributes = textView.typingAttributes
+        newTypingAttributes[.underlineStyle] = isUnderline ? NSUnderlineStyle.single.rawValue : 0
+        textView.typingAttributes = newTypingAttributes
     }
     
     @objc private func imageButtonTapped() {
@@ -109,37 +124,43 @@ extension NoteEditorViewController {
         present(imagePicker, animated: true, completion: nil)
     }
     
-    private func updateFont(isBold: Bool, isItalic: Bool, isUnderline: Bool, fontSize: CGFloat) {
-        guard textView.selectedTextRange != nil else { return }
-        
-        var attributes: [NSAttributedString.Key: Any] = [:]
-        let existingFont = textView.font ?? UIFont.systemFont(ofSize: fontSize)
-        var newTraits = existingFont.fontDescriptor.symbolicTraits
-        
-        if isBold {
-            newTraits.insert(.traitBold)
+    //MARK: - Logic for update font
+    private func updateFont() {
+        let currentAttributes: [NSAttributedString.Key: Any]
+        if let selectedRange = textView.selectedTextRange, !selectedRange.isEmpty, let selectedTextAttributes = textView.textStorage.attributes(at: textView.offset(from: textView.beginningOfDocument, to: selectedRange.start), effectiveRange: nil) as [NSAttributedString.Key: Any]? {
+            currentAttributes = selectedTextAttributes
         } else {
-            newTraits.remove(.traitBold)
+            currentAttributes = textView.typingAttributes
         }
         
-        if isItalic {
-            newTraits.insert(.traitItalic)
-        } else {
-            newTraits.remove(.traitItalic)
+        var newAttributes = currentAttributes
+        
+        if let existingFont = currentAttributes[.font] as? UIFont {
+            var newTraits = existingFont.fontDescriptor.symbolicTraits
+            if isBold {
+                newTraits.insert(.traitBold)
+            } else {
+                newTraits.remove(.traitBold)
+            }
+            if isItalic {
+                newTraits.insert(.traitItalic)
+            } else {
+                newTraits.remove(.traitItalic)
+            }
+            
+            if let newFontDescriptor = existingFont.fontDescriptor.withSymbolicTraits(newTraits) {
+                let newFont = UIFont(descriptor: newFontDescriptor, size: currentFontSize)
+                newAttributes[.font] = newFont
+            }
         }
         
-        if let newFontDescriptor = existingFont.fontDescriptor.withSymbolicTraits(newTraits) {
-            let newFont = UIFont(descriptor: newFontDescriptor, size: fontSize)
-            attributes[.font] = newFont
-        }
+        newAttributes[.underlineStyle] = isUnderline ? NSUnderlineStyle.single.rawValue : 0
         
-        if isUnderline {
-            attributes[.underlineStyle] = NSUnderlineStyle.single.rawValue
-        } else {
-            attributes[.underlineStyle] = 0
-        }
         
-        textView.textStorage.addAttributes(attributes, range: textView.selectedRange)
+        if let selectedRange = textView.selectedTextRange, !selectedRange.isEmpty {
+            textView.textStorage.addAttributes(newAttributes, range: textView.selectedRange)
+        }
+        textView.typingAttributes = newAttributes
     }
 }
 

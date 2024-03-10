@@ -8,10 +8,13 @@
 import Foundation
 
 final class NotesManager {
+    
+    //MARK: - Properties
     private var notes: [Note] = []
     private let notesKey = "notes"
     private let welcomeNote = Note(text: "Welcome to Notes App!")
-
+    
+    //MARK: - Methods
     func loadNotes() {
         if let savedNotesData = UserDefaults.standard.object(forKey: notesKey) as? Data {
             let decoder = JSONDecoder()

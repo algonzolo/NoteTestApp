@@ -8,12 +8,12 @@
 import UIKit
 
 final class NoteListTableViewCell: UITableViewCell {
-
+    //MARK: - Properties
     static let cellIdentifier = "NoteListTableViewCell"
     
     let titleLabel: UILabel = {
         let label = UILabel()
-        label.font = .systemFont(ofSize: 20, weight: .bold)
+        label.font = .systemFont(ofSize: 16, weight: .bold)
         label.translatesAutoresizingMaskIntoConstraints = false
         return label
     }()
