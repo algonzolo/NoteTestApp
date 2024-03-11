@@ -100,17 +100,17 @@ extension NoteEditorViewController {
     
     @objc private func toggleBoldText() {
         isBold.toggle()
-        updateFont()
+        updateFont(isBold: isBold, isItalic: isItalic, isUnderline: isUnderline)
     }
     
     @objc private func toggleItalicText() {
         isItalic.toggle()
-        updateFont()
+        updateFont(isBold: isBold, isItalic: isItalic, isUnderline: isUnderline)
     }
     
     @objc private func toggleUnderlineText() {
         isUnderline.toggle()
-        updateFont()
+        updateFont(isBold: isBold, isItalic: isItalic, isUnderline: isUnderline)
         var newTypingAttributes = textView.typingAttributes
         newTypingAttributes[.underlineStyle] = isUnderline ? NSUnderlineStyle.single.rawValue : 0
         textView.typingAttributes = newTypingAttributes
@@ -125,42 +125,39 @@ extension NoteEditorViewController {
     }
     
     //MARK: - Logic for update font
-    private func updateFont() {
-        let currentAttributes: [NSAttributedString.Key: Any]
-        if let selectedRange = textView.selectedTextRange, !selectedRange.isEmpty, let selectedTextAttributes = textView.textStorage.attributes(at: textView.offset(from: textView.beginningOfDocument, to: selectedRange.start), effectiveRange: nil) as [NSAttributedString.Key: Any]? {
-            currentAttributes = selectedTextAttributes
+    private func updateFont(isBold: Bool, isItalic: Bool, isUnderline: Bool) {
+        guard let selectedRange = textView.selectedTextRange, !selectedRange.isEmpty else { return }
+
+        var attributes: [NSAttributedString.Key: Any] = [:]
+        let existingFont = textView.font ?? UIFont.systemFont(ofSize: currentFontSize)
+        var newTraits = existingFont.fontDescriptor.symbolicTraits
+
+        if isBold {
+            newTraits.insert(.traitBold)
         } else {
-            currentAttributes = textView.typingAttributes
+            newTraits.remove(.traitBold)
         }
-        
-        var newAttributes = currentAttributes
-        
-        if let existingFont = currentAttributes[.font] as? UIFont {
-            var newTraits = existingFont.fontDescriptor.symbolicTraits
-            if isBold {
-                newTraits.insert(.traitBold)
-            } else {
-                newTraits.remove(.traitBold)
-            }
-            if isItalic {
-                newTraits.insert(.traitItalic)
-            } else {
-                newTraits.remove(.traitItalic)
-            }
-            
-            if let newFontDescriptor = existingFont.fontDescriptor.withSymbolicTraits(newTraits) {
-                let newFont = UIFont(descriptor: newFontDescriptor, size: currentFontSize)
-                newAttributes[.font] = newFont
-            }
+
+        if isItalic {
+            newTraits.insert(.traitItalic)
+        } else {
+            newTraits.remove(.traitItalic)
         }
-        
-        newAttributes[.underlineStyle] = isUnderline ? NSUnderlineStyle.single.rawValue : 0
-        
-        
-        if let selectedRange = textView.selectedTextRange, !selectedRange.isEmpty {
-            textView.textStorage.addAttributes(newAttributes, range: textView.selectedRange)
+
+        if let newFontDescriptor = existingFont.fontDescriptor.withSymbolicTraits(newTraits) {
+            let newFont = UIFont(descriptor: newFontDescriptor, size: existingFont.pointSize)
+            attributes[.font] = newFont
         }
-        textView.typingAttributes = newAttributes
+
+        if isUnderline {
+            attributes[.underlineStyle] = NSUnderlineStyle.single.rawValue
+        } else {
+            attributes[.underlineStyle] = 0
+        }
+
+        textView.textStorage.beginEditing()
+        textView.textStorage.addAttributes(attributes, range: textView.selectedRange)
+        textView.textStorage.endEditing()
     }
 }
 
